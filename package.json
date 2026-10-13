@@ -1,0 +1,6 @@
+{
+  "name": "manutd-stats",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Stats and trends dashboard for the Man United ticket tracker's raw data log"
+}

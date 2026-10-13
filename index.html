@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Old Trafford ticket watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #e6e9ec;
+    --surface: #ffffff;
+    --ink: #11151a;
+    --muted: #5b6671;
+    --line: #d3d9df;
+    --soft: #f1f3f5;
+    --red: #d0202b;
+    --red-deep: #9c131c;
+    --amber: #f1a900;
+    --green: #1b7a4b;
+    --navy: #243a5e;
+    --slate: #7d8a99;
+    --display: 'Big Shoulders Display', 'Arial Narrow', Impact, sans-serif;
+    --body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+  a { color: inherit; }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--navy); outline-offset: 2px; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+
+  /* ── header ── */
+  header.top { background: var(--surface); border-bottom: 6px solid var(--red); }
+  header.top .wrap { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 28px; padding-top: 22px; padding-bottom: 16px; }
+  h1 { margin: 0; font-family: var(--display); font-weight: 900; font-size: clamp(38px, 6vw, 62px); line-height: .92; letter-spacing: -.01em; }
+  h1 span { color: var(--red); }
+  .status { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 999px; font-weight: 500; }
+  .status .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--slate); flex: none; }
+  .status.live .dot { background: var(--green); box-shadow: 0 0 0 4px rgba(27,122,75,.18); }
+  .status.delayed .dot { background: var(--amber); box-shadow: 0 0 0 4px rgba(241,169,0,.2); }
+  .status.offline .dot { background: var(--red); box-shadow: 0 0 0 4px rgba(208,32,43,.18); }
+  .status small { color: var(--muted); font-weight: 400; }
+
+  /* ── controls ── */
+  .controls { background: var(--surface); border-bottom: 1px solid var(--line); }
+  .controls .wrap { display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: center; padding-top: 12px; padding-bottom: 12px; }
+  .ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .ctl > label, .ctl > .lbl { color: var(--muted); font-size: 13px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--soft); }
+  .seg button { border: 0; background: transparent; padding: 7px 13px; cursor: pointer; font-weight: 500; border-right: 1px solid var(--line); }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .seg button { white-space: nowrap; }
+  @media (max-width: 600px) { .seg button { padding: 7px 9px; font-size: 14px; } .wrap { padding: 0 14px; } }
+  select, input[type=number] { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--surface); }
+  input[type=number] { width: 74px; }
+  .updated { margin-left: auto; color: var(--muted); font-size: 13px; }
+
+  main { padding: 26px 0 60px; }
+  section.block { margin-top: 38px; }
+  section.block:first-child { margin-top: 0; }
+  h2 { margin: 0 0 4px; font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: .005em; }
+  .sub { margin: 0 0 14px; color: var(--muted); max-width: 70ch; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .grid-main { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 960px) { .grid2, .grid-main { grid-template-columns: minmax(0, 1fr); } }
+  .chartbox { position: relative; height: 300px; }
+  .chartbox.tall { height: 340px; }
+  .panel h3 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+  .panel .note { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+
+  /* ── fixtures board ── */
+  .board { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: minmax(150px, 1.3fr) 110px minmax(210px, 1.4fr) 140px minmax(150px, 1fr); gap: 8px 18px; align-items: center; padding: 14px 18px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row.head { background: var(--soft); color: var(--muted); font-size: 13px; padding-top: 9px; padding-bottom: 9px; }
+  .fx-name { font-weight: 600; font-size: 17px; }
+  .tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; vertical-align: 2px; }
+  .tag.ga { background: var(--green); color: #fff; }
+  .tag.ucl { background: var(--navy); color: #fff; }
+  .tag.stale { background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
+  .fx-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); font-weight: 400; }
+  .big { font-family: var(--display); font-weight: 800; font-size: 48px; line-height: 1; }
+  .big small { display: block; font-family: var(--body); font-weight: 400; font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .pairs { display: flex; gap: 20px; }
+  .pairs div { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1; }
+  .pairs div small { display: block; font-family: var(--body); font-weight: 400; font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .pairs .adj { color: var(--red); }
+  .spark svg { display: block; width: 100%; height: 38px; }
+  .lastdrop { font-size: 13px; }
+  .lastdrop b { font-family: var(--display); font-size: 22px; color: var(--red); margin-right: 4px; }
+  .lastdrop span { display: block; color: var(--muted); }
+  @media (max-width: 860px) {
+    .row.head { display: none; }
+    .row { grid-template-columns: 1fr 1fr; }
+    .row > :first-child { grid-column: 1 / -1; }
+    .spark, .lastdrop { grid-column: 1 / -1; }
+  }
+
+  /* ── drop stubs ── */
+  .stubs { display: grid; gap: 14px; }
+  .stub { position: relative; display: grid; grid-template-columns: 112px 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  .stub::before, .stub::after { content: ''; position: absolute; left: 112px; width: 18px; height: 18px; background: var(--ground); border: 1px solid var(--line); border-radius: 50%; transform: translateX(-9px); }
+  .stub::before { top: -10px; clip-path: inset(50% 0 0 0); }
+  .stub::after { bottom: -10px; clip-path: inset(0 0 50% 0); }
+  .stub .num { display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 2px dashed var(--line); padding: 14px 6px; }
+  .stub .num b { font-family: var(--display); font-weight: 900; font-size: 54px; line-height: .95; color: var(--red); }
+  .stub .num span { font-size: 12px; color: var(--muted); }
+  .stub .info { padding: 13px 16px; min-width: 0; }
+  .stub .info h3 { margin: 0; font-size: 17px; font-weight: 600; }
+  .stub .when { color: var(--muted); font-size: 13px; margin: 1px 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chip { padding: 2px 9px; border-radius: 6px; background: var(--soft); border: 1px solid var(--line); font-size: 13px; }
+  .chip b { font-weight: 700; }
+  .chip.lower { border-left: 4px solid var(--red); }
+  .chip.middle { border-left: 4px solid var(--slate); }
+  .chip.upper { border-left: 4px solid var(--navy); }
+  .verdict { font-size: 13px; font-weight: 600; }
+  .verdict.sold { color: var(--green); }
+  .verdict.open { color: var(--red-deep); }
+  .verdict.unk { color: var(--muted); font-weight: 500; }
+  .empty { padding: 26px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; }
+
+  .insights { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .insights li { padding-left: 16px; border-left: 4px solid var(--red); }
+  .gaitem { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; }
+
+  /* ── heatmap ── */
+  .heat { display: grid; grid-template-columns: 34px repeat(24, minmax(0, 1fr)); gap: 3px; font-size: 11px; color: var(--muted); }
+  .heat .cell { aspect-ratio: 1 / 1; border-radius: 3px; background: var(--soft); }
+  .heat .cell.thin { background: repeating-linear-gradient(45deg, var(--soft), var(--soft) 3px, #e4e8ec 3px, #e4e8ec 6px); }
+  .heat .lab { display: flex; align-items: center; }
+  .heat .hr { text-align: center; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12px; color: var(--muted); align-items: center; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* ── tables ── */
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--soft); white-space: nowrap; }
+  th.n, td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: 0; }
+  .tier { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+  .tier.Lower { background: var(--red); } .tier.Middle { background: var(--slate); } .tier.Upper { background: var(--navy); } .tier.Other { background: var(--muted); }
+  .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--red); vertical-align: middle; margin-right: 8px; }
+
+  .health { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .health div { padding: 12px 14px; background: var(--soft); border-radius: 10px; }
+  .health b { display: block; font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1; }
+  .health span { font-size: 13px; color: var(--muted); }
+
+  .banner { margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; background: #fff4d6; border: 1px solid #e8cf86; }
+  .banner.err { background: #fde8ea; border-color: #eba0a6; }
+  .keyform { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .keyform input { flex: 1; min-width: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .keyform button { border: 0; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600; }
+  footer { color: var(--muted); font-size: 13px; padding-bottom: 40px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>Old Trafford<br><span>ticket watch</span></h1>
+    <div id="status" class="status" role="status" aria-live="polite"><span class="dot"></span><span id="statusText">Loading…</span></div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="wrap">
+    <div class="ctl"><span class="lbl" id="rangeLbl">Look back</span>
+      <div class="seg" role="group" aria-labelledby="rangeLbl" id="range">
+        <button data-h="24">24 hours</button><button data-h="72">3 days</button><button data-h="168">7 days</button><button data-h="336">14 days</button><button data-h="720">30 days</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="fixture">Fixture</label>
+      <select id="fixture"><option value="all">All fixtures</option></select>
+    </div>
+    <div class="ctl"><label for="threshold">A drop is at least</label>
+      <input id="threshold" type="number" min="3" max="500" step="1" inputmode="numeric"> <span class="lbl">new seats</span>
+    </div>
+    <div class="updated" id="updated"></div>
+  </div>
+</div>
+
+<main class="wrap">
+  <div id="banner" hidden></div>
+
+  <section class="block" aria-labelledby="h-now">
+    <h2 id="h-now">Right now</h2>
+    <p class="sub">The latest fully-loaded scan of each game. Adjacent pairs are the ones the tracker alerts on.</p>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section class="block" aria-labelledby="h-drops">
+    <h2 id="h-drops">Recent drops</h2>
+    <p class="sub" id="dropsSub"></p>
+    <div class="grid-main">
+      <div class="stubs" id="stubs"></div>
+      <aside class="panel" aria-label="What stands out">
+        <h3>What stands out</h3>
+        <p class="note">Worked out from the data in the range you picked.</p>
+        <ul class="insights" id="insights"></ul>
+        <div id="gaBox"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-time">
+    <h2 id="h-time">Over time</h2>
+    <p class="sub">Each line is a game. Sudden vertical jumps are releases; slow slides are people buying.</p>
+    <div class="panel">
+      <div class="ctl" style="margin-bottom:10px"><span class="lbl" id="metricLbl">Show</span>
+        <div class="seg" role="group" aria-labelledby="metricLbl" id="metric">
+          <button data-m="1">Seats available</button><button data-m="2">All pairs</button><button data-m="3">Adjacent pairs</button>
+        </div>
+      </div>
+      <div class="chartbox tall"><canvas id="cSeries" role="img" aria-label="Line chart of available seats over time per fixture"></canvas></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-when">
+    <h2 id="h-when">When new seats appear</h2>
+    <p class="sub">A release is 5 or more extra seats between two scans. Rates are per scan, so busy and quiet periods of tracking don't skew it.</p>
+    <div class="grid2">
+      <div class="panel"><h3>By hour of day</h3><p class="note">Number of releases; red = counted as drops.</p>
+        <div class="chartbox"><canvas id="cHour" role="img" aria-label="Bar chart of releases by hour of day"></canvas></div></div>
+      <div class="panel"><h3>By weekday and hour</h3><p class="note">Darker = more releases per scan in that slot.</p>
+        <div class="heat" id="heat" role="img" aria-label="Heatmap of releases by weekday and hour"></div>
+        <div class="legend"><span><i style="background:rgba(208,32,43,.15)"></i>Few</span><span><i style="background:rgba(208,32,43,.95)"></i>Many</span><span><i style="background:repeating-linear-gradient(45deg,#f1f3f5,#f1f3f5 3px,#e4e8ec 3px,#e4e8ec 6px)"></i>Under 3 scans, not enough to judge</span></div></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-what">
+    <h2 id="h-what">What gets released, and where</h2>
+    <div class="grid2" style="margin-top:12px">
+      <div class="panel"><h3>Size of increases</h3><p class="note" id="histNote">New seats between two scans. Red bars are big enough to count as drops.</p>
+        <div class="chartbox"><canvas id="cHist" role="img" aria-label="Bar chart of how many seats appear at once"></canvas></div></div>
+      <div class="panel"><h3>Stands with seats</h3><p class="note">Share of scans where the stand had at least one seat.</p>
+        <div class="chartbox"><canvas id="cStands" role="img" aria-label="Bar chart of how often each stand has seats"></canvas></div>
+        <div class="legend"><span><i style="background:var(--red)"></i>Lower tier</span><span><i style="background:var(--slate)"></i>Middle</span><span><i style="background:var(--navy)"></i>Upper</span></div></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h3>Blocks with the most seats</h3><p class="note">Averages are over every complete scan in the range.</p>
+      <div class="tablewrap"><table id="blocks"></table></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-fx">
+    <h2 id="h-fx">Games compared</h2>
+    <div class="grid-main" style="margin-top:12px">
+      <div class="panel"><div class="tablewrap"><table id="fxTable"></table></div></div>
+      <div class="panel" id="compBox"></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-health">
+    <h2 id="h-health">Data health</h2>
+    <p class="sub">How much to trust the numbers above. Only fully-loaded scans are used for comparisons, so a half-loaded page can never look like a drop or a sell-out.</p>
+    <div class="panel">
+      <div class="health" id="health"></div>
+      <div id="healthDetail"></div>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var PALETTE = ['#d0202b', '#243a5e', '#e0a100', '#14807a', '#6b4fa3', '#e0662b', '#3d8b37', '#6b7280'];
+  var $ = function (id) { return document.getElementById(id); };
+  var store = { get: function (k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
+                set: function (k, v) { try { window.localStorage.setItem(k, v); } catch (e) {} } };
+
+  var state = { hours: +store.get('hours') || 168, threshold: +store.get('threshold') || 20, fixture: store.get('fixture') || 'all', metric: +store.get('metric') || 1 };
+  var data = null, charts = {}, timer = null, inflight = 0, fixturesKnown = '';
+
+  // ── small helpers ──
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmtT(t) { var d = new Date(t); return DAYS[(d.getUTCDay() + 6) % 7] + ' ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ', ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()); }
+  function fmtShort(t) { var d = new Date(t); return DAYS[(d.getUTCDay() + 6) % 7] + ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()); }
+  function ago(min) {
+    if (min == null) return '';
+    if (min < 1) return 'just now';
+    if (min < 90) return min + ' min ago';
+    if (min < 2880) return Math.round(min / 60) + ' hours ago';
+    return Math.round(min / 1440) + ' days ago';
+  }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+  function dur(min) { return min < 90 ? min + ' min' : (Math.round(min / 6) / 10) + ' hours'; }
+  function tierClass(t) { return String(t || '').toLowerCase(); }
+
+  // ── data loading ──
+  function params() { return 'hours=' + state.hours + '&threshold=' + state.threshold + '&fixture=' + encodeURIComponent(state.fixture); }
+  function load() {
+    var mine = ++inflight;
+    var key = store.get('dashKey');
+    var headers = key ? { 'x-dashboard-key': key } : {};
+    return fetch('/api/stats?' + params(), { headers: headers }).then(function (res) {
+      return res.json().catch(function () { return { error: 'The server sent something unexpected (HTTP ' + res.status + ').' }; })
+        .then(function (body) { return { res: res, body: body }; });
+    }).then(function (r) {
+      if (mine !== inflight) return;                                    // a newer request replaced this one
+      if (r.res.status === 401) return showKeyForm(!!key);
+      if (!r.res.ok) return showError(r.body.error || ('Error ' + r.res.status));
+      data = r.body; hideBanner(); render();
+    }).catch(function (e) { if (mine === inflight) showError('Could not reach the dashboard server: ' + e.message); });
+  }
+  function scheduleRefresh() {
+    clearInterval(timer);
+    timer = setInterval(function () { if (!document.hidden) load(); }, 60000);
+  }
+
+  // ── banners ──
+  function hideBanner() { $('banner').hidden = true; $('banner').innerHTML = ''; }
+  function showError(msg) {
+    var b = $('banner'); b.hidden = false; b.className = 'banner err';
+    b.innerHTML = '<strong>Couldn\'t load the data.</strong> ' + esc(msg);
+    setStatus('offline', 'No connection to the data', '');
+  }
+  function showKeyForm(wasWrong) {
+    var b = $('banner'); b.hidden = false; b.className = 'banner';
+    b.innerHTML = '<strong>' + (wasWrong ? 'That key didn\'t work.' : 'This dashboard is private.') + '</strong> Enter your access key.' +
+      '<form class="keyform" id="keyform"><input id="keyin" type="password" autocomplete="current-password" aria-label="Access key"><button type="submit">Unlock</button></form>';
+    $('keyform').addEventListener('submit', function (e) { e.preventDefault(); store.set('dashKey', $('keyin').value.trim()); load(); });
+    setStatus('', 'Locked', '');
+  }
+  function setStatus(cls, text, small) {
+    var s = $('status'); s.className = 'status ' + cls;
+    $('statusText').innerHTML = esc(text) + (small ? ' <small>' + esc(small) + '</small>' : '');
+  }
+
+  // ── rendering ──
+  function render() {
+    renderStatus(); renderControls();
+    if (data.empty) { renderEmpty(); return; }
+    renderBoard(); renderDrops(); renderInsights(); renderSeries(); renderHour(); renderHeat();
+    renderHist(); renderStands(); renderBlocks(); renderFixtureTable(); renderHealth(); renderFoot();
+    var w = data.warnings;
+    if (w && w.length) { var b = $('banner'); b.hidden = false; b.className = 'banner'; b.innerHTML = '<strong>Some days could not be read:</strong> ' + esc(w.join('; ')); }
+  }
+  function renderStatus() {
+    var t = data.tracker || {};
+    if (t.state === 'nodata') return setStatus('', 'No data yet', '');
+    var txt = { live: 'Tracker is live', delayed: 'Tracker is running late', offline: 'Tracker looks offline', unknown: 'Tracker status unknown' }[t.state] || 'Tracker';
+    setStatus(t.state === 'unknown' ? '' : t.state, txt, 'last scan ' + ago(t.minutesAgo) + ' (' + fmtT(t.lastScanT) + ')');
+    $('updated').textContent = 'Refreshes every minute. Loaded ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  function renderControls() {
+    var seg = $('range').children;
+    for (var i = 0; i < seg.length; i++) seg[i].setAttribute('aria-pressed', String(+seg[i].dataset.h === state.hours));
+    var m = $('metric').children;
+    for (var j = 0; j < m.length; j++) m[j].setAttribute('aria-pressed', String(+m[j].dataset.m === state.metric));
+    if (document.activeElement !== $('threshold')) $('threshold').value = state.threshold;
+    var names = (data.fixtures || []).map(function (f) { return f.name; });
+    var sig = names.join('|') + '#' + state.fixture;
+    if (sig !== fixturesKnown) {
+      fixturesKnown = sig;
+      var sel = $('fixture');
+      sel.innerHTML = '<option value="all">All fixtures</option>' + names.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('');
+      sel.value = names.indexOf(state.fixture) >= 0 ? state.fixture : 'all';
+    }
+  }
+  function renderEmpty() {
+    $('board').innerHTML = '<div class="empty">' + esc(data.note || 'No data yet.') + '</div>';
+    $('stubs').innerHTML = ''; $('insights').innerHTML = ''; $('gaBox').innerHTML = '';
+    $('dropsSub').textContent = '';
+    ['blocks', 'fxTable'].forEach(function (id) { $(id).innerHTML = ''; });
+    $('health').innerHTML = ''; $('healthDetail').innerHTML = ''; $('compBox').innerHTML = ''; $('heat').innerHTML = ''; $('foot').textContent = '';
+    Object.keys(charts).forEach(function (k) { charts[k].destroy(); delete charts[k]; });
+  }
+
+  function sparkline(pts) {
+    if (!pts || pts.length < 2) return '<span class="fx-sub">Not enough scans yet</span>';
+    var W = 160, H = 38, xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y1 = Math.max(1, Math.max.apply(null, ys));
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + ((p[0] - x0) / (x1 - x0 || 1) * (W - 4) + 2).toFixed(1) + ' ' + (H - 3 - (p[1] / y1) * (H - 8)).toFixed(1); }).join(' ');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Seats over the last 24 hours">' +
+      '<path d="' + line + ' L' + (W - 2) + ' ' + (H - 1) + ' L2 ' + (H - 1) + ' Z" fill="rgba(208,32,43,.12)"></path>' +
+      '<path d="' + line + '" fill="none" stroke="#d0202b" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path></svg>';
+  }
+  function renderBoard() {
+    var fx = data.fixtures || [];
+    if (!fx.length) { $('board').innerHTML = '<div class="empty">No fixtures scanned in this range.</div>'; return; }
+    var html = '<div class="row head"><div>Game</div><div>Seats</div><div>Pairs</div><div>Last 24 hours</div><div>Last drop</div></div>';
+    fx.forEach(function (f) {
+      var tags = (f.ga ? '<span class="tag ga">General sale</span>' : '') + (f.ucl ? '<span class="tag ucl">Champions League</span>' : '') +
+                 (f.minutesBehind > 90 ? '<span class="tag stale">Not scanned lately</span>' : '');
+      var n = f.now;
+      var sub = n ? (f.lastScanComplete ? 'Scanned ' + fmtT(n.t) : 'Latest scan was incomplete, showing ' + fmtT(n.t)) : 'No complete scan yet';
+      var blocks = n && n.blocks.length ? '<span class="fx-sub">' + n.blocks.slice(0, 3).map(function (b) { return esc(b.stand) + ' ' + b.n; }).join(', ') + '</span>' : '';
+      html += '<div class="row"><div class="fx-name">' + esc(f.name) + tags + '<span class="fx-sub">' + esc(sub) + '</span>' + blocks + '</div>' +
+        '<div class="big">' + (n ? n.seats : '–') + '<small>' + (n && n.noSections ? 'no general seats' : 'seats') + '</small></div>' +
+        '<div class="pairs">' + (n ? '<div class="adj">' + n.adj + '<small>adjacent</small></div><div>' + n.beh + '<small>behind</small></div><div>' + n.dia + '<small>diagonal</small></div>' : '') + '</div>' +
+        '<div class="spark">' + sparkline(f.spark) + '</div>' +
+        '<div class="lastdrop">' + (f.lastDrop ? '<b>+' + f.lastDrop.delta + '</b><span>' + esc(fmtT(f.lastDrop.t)) + '</span>' : '<span>None seen yet</span>') + '</div></div>';
+    });
+    $('board').innerHTML = html;
+  }
+
+  function renderDrops() {
+    var d = data.drops || [], th = data.params.threshold;
+    $('dropsSub').textContent = d.length
+      ? d.length + ' drop' + (d.length === 1 ? '' : 's') + ' of ' + th + ' or more new seats between two scans, newest first. Times are when the scan noticed it.'
+      : 'Nothing has gone up by ' + th + ' or more seats in this range.';
+    if (!d.length) { $('stubs').innerHTML = '<div class="empty">No drops in this range. Try a longer look-back or a lower threshold.</div>'; return; }
+    $('stubs').innerHTML = d.slice(0, 20).map(function (e) {
+      var chips = (e.blocks || []).slice(0, 5).map(function (b) {
+        var tier = String(b.stand || '').split(' ')[0];
+        return '<span class="chip ' + tierClass(tier) + '"><b>+' + b.delta + '</b> ' + esc(b.stand) + ' <span style="color:var(--muted)">' + esc(b.code) + '</span></span>';
+      }).join('');
+      var pairs = e.pairs ? '<span class="chip"><b>' + (e.pairs.adj >= 0 ? '+' : '') + e.pairs.adj + '</b> adjacent pairs</span>' : '';
+      var v;
+      if (e.sellState === 'sold') v = '<div class="verdict sold">Back down to normal after ' + dur(e.sellMin) + '</div>';
+      else if (e.sellState === 'open') v = '<div class="verdict open">Still mostly there ' + dur(e.sellMin) + ' later</div>';
+      else v = '<div class="verdict unk">Too recent to say how fast it sells</div>';
+      return '<article class="stub"><div class="num"><b>+' + e.delta + '</b><span>seats</span></div><div class="info">' +
+        '<h3>' + esc(e.fixture) + (e.ga ? '<span class="tag ga">General sale</span>' : '') + '</h3>' +
+        '<div class="when">' + esc(fmtT(e.t)) + ', from ' + e.from + ' to ' + e.to + ' seats</div>' +
+        '<div class="chips">' + chips + pairs + '</div>' + v + '</div></article>';
+    }).join('');
+  }
+  function renderInsights() {
+    $('insights').innerHTML = (data.insights || []).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('');
+    var ga = data.ga || [];
+    $('gaBox').innerHTML = ga.length ? ga.map(function (g) {
+      return '<div class="gaitem"><strong>' + esc(g.fixture) + '</strong> went on general sale on ' + esc(fmtT(g.sinceT)) + '. Average seats just before: <strong>' + (g.avgBefore == null ? 'n/a' : g.avgBefore) +
+        '</strong>, just after: <strong>' + (g.avgAfter == null ? 'n/a' : g.avgAfter) + '</strong>.</div>';
+    }).join('') : '';
+  }
+
+  // ── charts ──
+  function haveChart() { return typeof window.Chart !== 'undefined'; }
+  function mk(id, cfg) {
+    if (!haveChart()) { var c = $(id); if (c && c.parentNode) c.parentNode.innerHTML = '<div class="empty">Charts could not load (the chart library is blocked or offline).</div>'; return; }
+    if (charts[id]) charts[id].destroy();
+    var el = $(id); if (!el) return;
+    charts[id] = new window.Chart(el, cfg);
+  }
+  function baseOpts() {
+    return { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels: { boxWidth: 12, usePointStyle: false } } },
+             font: { family: "'Instrument Sans', system-ui, sans-serif" } };
+  }
+  function renderSeries() {
+    var series = data.trends.series || {}, names = Object.keys(series).sort();
+    if (state.fixture !== 'all') names = names.filter(function (n) { return n === state.fixture; });
+    var all = (data.fixtures || []).map(function (f) { return f.name; });
+    var ds = names.map(function (n) {
+      var i = all.indexOf(n);
+      return { label: n, data: series[n].map(function (p) { return { x: p[0], y: p[state.metric] }; }), borderColor: PALETTE[i % PALETTE.length],
+               backgroundColor: PALETTE[i % PALETTE.length], borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, stepped: 'before', tension: 0 };
+    });
+    var o = baseOpts();
+    o.interaction = { mode: 'nearest', axis: 'x', intersect: false };
+    o.scales = {
+      x: { type: 'linear', ticks: { maxTicksLimit: 8, callback: function (v) { return fmtShort(v); } }, grid: { color: '#eef0f2' } },
+      y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f2' } }
+    };
+    o.plugins.tooltip = { callbacks: { title: function (items) { return items.length ? fmtT(items[0].parsed.x) : ''; } } };
+    var xs = [];
+    ds.forEach(function (s) { s.data.forEach(function (p) { xs.push(p.x); }); });
+    if (xs.length) {
+      var lo = Math.min.apply(null, xs), hi = Math.max.apply(null, xs), H = 3600000;
+      var steps = [H, 3 * H, 6 * H, 12 * H, 24 * H, 48 * H], step = steps[steps.length - 1];
+      for (var si = 0; si < steps.length; si++) { if ((hi - lo) / steps[si] <= 8) { step = steps[si]; break; } }
+      o.scales.x.min = Math.floor(lo / step) * step;        // start on a round hour/day so labels read cleanly
+      o.scales.x.max = hi;
+      // place the ticks ourselves, on round hours/days (Chart.js would otherwise split the range evenly)
+      o.scales.x.afterBuildTicks = function (scale) {
+        var ticks = [];
+        for (var v = scale.min; v <= scale.max + 1; v += step) ticks.push({ value: v });
+        scale.ticks = ticks;
+      };
+    }
+    mk('cSeries', { type: 'line', data: { datasets: ds }, options: o });
+  }
+  function renderHour() {
+    var h = data.trends.hourly, labels = [], drops = [], rest = [];
+    for (var i = 0; i < 24; i++) { labels.push(pad(i)); drops.push(h.drops[i]); rest.push(Math.max(0, h.releases[i] - h.drops[i])); }
+    var o = baseOpts();
+    o.scales = { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f2' } } };
+    mk('cHour', { type: 'bar', data: { labels: labels, datasets: [
+      { label: 'Drops', data: drops, backgroundColor: '#d0202b' },
+      { label: 'Smaller releases (5+ seats)', data: rest, backgroundColor: '#f1a900' } ] }, options: o });
+  }
+  function renderHeat() {
+    var rel = data.trends.heat.releases, sc = data.trends.heat.scans, max = 0, r, c;
+    for (r = 0; r < 7; r++) for (c = 0; c < 24; c++) if (sc[r][c] >= 3) max = Math.max(max, rel[r][c] / sc[r][c]);
+    var html = '<div></div>';
+    for (c = 0; c < 24; c++) html += '<div class="hr">' + (c % 3 === 0 ? pad(c) : '') + '</div>';
+    for (r = 0; r < 7; r++) {
+      html += '<div class="lab">' + DAYS[r] + '</div>';
+      for (c = 0; c < 24; c++) {
+        var n = sc[r][c], k = rel[r][c];
+        var title = DAYS[r] + ' ' + pad(c) + ':00, ' + k + ' release' + (k === 1 ? '' : 's') + ' in ' + n + ' scan' + (n === 1 ? '' : 's');
+        if (n < 3) { html += '<div class="cell thin" title="' + esc(title) + '"></div>'; continue; }
+        var a = max > 0 && k > 0 ? 0.15 + 0.8 * ((k / n) / max) : 0;
+        html += '<div class="cell" style="' + (a ? 'background:rgba(208,32,43,' + a.toFixed(2) + ')' : '') + '" title="' + esc(title) + '"></div>';
+      }
+    }
+    $('heat').innerHTML = html;
+  }
+  function renderHist() {
+    var all = data.trends.histogram, th = data.params.threshold;
+    var small = all.length ? all[0].count : 0, hs = all.slice(1);
+    $('histNote').textContent = 'New seats between two scans, 5 or more. Red bars are big enough to count as drops.' +
+      (small ? ' Not shown: ' + small + ' tiny changes of 1 to 4 seats (single seats coming and going).' : '');
+    var colors = hs.map(function (b) { var lo = parseInt(b.label, 10); return lo >= th ? '#d0202b' : '#9aa5b1'; });
+    var o = baseOpts(); o.plugins.legend = { display: false };
+    o.scales = { x: { grid: { display: false }, title: { display: true, text: 'New seats at once' } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f2' } } };
+    mk('cHist', { type: 'bar', data: { labels: hs.map(function (b) { return b.label; }), datasets: [{ data: hs.map(function (b) { return b.count; }), backgroundColor: colors }] }, options: o });
+  }
+  function renderStands() {
+    var st = data.stands || [], col = { Lower: '#d0202b', Middle: '#7d8a99', Upper: '#243a5e', Other: '#5b6671' };
+    var o = baseOpts(); o.indexAxis = 'y'; o.plugins.legend = { display: false };
+    o.scales = { x: { beginAtZero: true, max: 100, ticks: { callback: function (v) { return v + '%'; } }, grid: { color: '#eef0f2' } }, y: { grid: { display: false } } };
+    o.plugins.tooltip = { callbacks: { label: function (c) { var s = st[c.dataIndex]; return c.parsed.x + '% of scans, ' + s.avgSeats + ' seats on average'; } } };
+    mk('cStands', { type: 'bar', data: { labels: st.map(function (s) { return s.stand; }), datasets: [{ data: st.map(function (s) { return s.appearPct; }), backgroundColor: st.map(function (s) { return col[s.tier] || col.Other; }) }] }, options: o });
+  }
+
+  // ── tables ──
+  function renderBlocks() {
+    var b = data.blocks || [];
+    if (!b.length) { $('blocks').innerHTML = '<tr><td>No seats seen in this range.</td></tr>'; return; }
+    var max = Math.max.apply(null, b.map(function (x) { return x.avgAll; })) || 1;
+    $('blocks').innerHTML = '<thead><tr><th>Block</th><th>Stand</th><th>Tier</th><th class="n">Has seats</th><th class="n">Avg seats</th><th class="n">Most at once</th><th class="n">Avg adjacent pairs</th><th class="n">Adult price</th></tr></thead><tbody>' +
+      b.map(function (x) {
+        return '<tr><td><strong>' + esc(x.code) + '</strong></td><td>' + esc(x.stand) + '</td><td><span class="tier ' + esc(x.tier) + '">' + esc(x.tier) + '</span></td>' +
+          '<td class="n">' + x.appearPct + '%</td><td class="n"><span class="bar" style="width:' + Math.max(2, Math.round(x.avgAll / max * 70)) + 'px"></span>' + x.avgAll + '</td>' +
+          '<td class="n">' + x.max + '</td><td class="n">' + x.avgAdjPairs + '</td><td class="n">' + (x.avgAdult == null ? '–' : '£' + x.avgAdult.toFixed(2)) + '</td></tr>';
+      }).join('') + '</tbody>';
+  }
+  function renderFixtureTable() {
+    var f = data.fixtureStats || [];
+    $('fxTable').innerHTML = '<thead><tr><th>Game</th><th class="n">Releases</th><th class="n">Drops</th><th class="n">Biggest</th><th class="n">Per 100 scans</th></tr></thead><tbody>' +
+      f.map(function (x) {
+        return '<tr><td>' + esc(x.fixture) + (x.ucl ? '<span class="tag ucl">Champions League</span>' : '') + '</td><td class="n">' + x.releases + '</td><td class="n">' + x.drops +
+          '</td><td class="n">' + (x.biggest ? '+' + x.biggest : '–') + '</td><td class="n">' + (x.releasesPer100 == null ? '–' : x.releasesPer100) + '</td></tr>';
+      }).join('') + '</tbody>';
+    var c = data.competition || {}, u = c.ucl || {}, p = c.pl || {};
+    $('compBox').innerHTML = '<h3>Champions League vs Premier League</h3><p class="note">Releases per 100 scan intervals, so the number of games on each side doesn\'t matter.</p>' +
+      '<div class="health"><div><b>' + (u.releasesPer100 == null ? '–' : u.releasesPer100) + '</b><span>Champions League (' + plural(u.fixtures || 0, 'game') + ', ' + plural(u.drops || 0, 'drop') + ')</span></div>' +
+      '<div><b>' + (p.releasesPer100 == null ? '–' : p.releasesPer100) + '</b><span>Premier League (' + plural(p.fixtures || 0, 'game') + ', ' + plural(p.drops || 0, 'drop') + ')</span></div></div>';
+  }
+  function renderHealth() {
+    var q = data.quality || {}, sc = q.statusCounts || {}, bad = Object.keys(sc).filter(function (k) { return k !== 'ok'; });
+    $('health').innerHTML =
+      '<div><b>' + (q.completePct == null ? '–' : q.completePct + '%') + '</b><span>of scans loaded fully (' + (q.complete || 0) + ' of ' + (q.scans || 0) + ')</span></div>' +
+      '<div><b>' + (q.cycles || 0) + '</b><span>scan rounds in range</span></div>' +
+      '<div><b>' + (q.medianCycleMin == null ? '–' : q.medianCycleMin + ' min') + '</b><span>typical gap between rounds</span></div>';
+    var d = '';
+    if (bad.length) d += '<p>Problems the tracker logged: ' + bad.map(function (k) { return esc(k.replace(/_/g, ' ')) + ' (' + sc[k] + ')'; }).join(', ') + '. These scans are left out of every comparison.</p>';
+    var off = q.offline || [];
+    if (off.length) d += '<p>Gaps longer than 75 minutes between rounds (tracker off, or nothing logged):</p><ul>' + off.map(function (o) { return '<li>' + esc(o.from) + ' to ' + esc(o.to) + ' (' + dur(o.minutes) + ')</li>'; }).join('') + '</ul>';
+    $('healthDetail').innerHTML = d || '<p>No gaps or loading problems in this range.</p>';
+  }
+  function renderFoot() {
+    var f = data.files || [];
+    $('foot').textContent = 'Data from ' + f.length + ' daily file' + (f.length === 1 ? '' : 's') + ' in GitHub (' + (data.dataRange ? data.dataRange.from.replace('T', ' ') + ' to ' + data.dataRange.to.replace('T', ' ') : '') + '). Times are UK local time, as logged by the tracker.';
+  }
+
+  // ── wiring ──
+  $('range').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    state.hours = +b.dataset.h; store.set('hours', state.hours); load();
+  });
+  $('metric').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    state.metric = +b.dataset.m; store.set('metric', state.metric);
+    if (data && !data.empty) { renderControls(); renderSeries(); }
+  });
+  $('fixture').addEventListener('change', function (e) { state.fixture = e.target.value; store.set('fixture', state.fixture); load(); });
+  var tt = null;
+  $('threshold').addEventListener('input', function (e) {
+    var v = parseInt(e.target.value, 10);
+    if (!(v >= 3 && v <= 500)) return;
+    clearTimeout(tt); tt = setTimeout(function () { state.threshold = v; store.set('threshold', v); load(); }, 450);
+  });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
+
+  $('threshold').value = state.threshold;
+  load(); scheduleRefresh();
+})();
+</script>
+</body>
+</html>
