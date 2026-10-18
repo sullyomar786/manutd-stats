@@ -461,7 +461,7 @@
       sel.innerHTML = '<option value="all">All fixtures</option>' + names.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('');
       sel.value = names.indexOf(state.fixture) >= 0 ? state.fixture : 'all';
     }
-    renderSeriesPicker(names);
+    renderSeriesPicker(Object.keys((data.trends && data.trends.series) || {}).sort());
   }
   function renderEmpty() {
     $('board').innerHTML = '<div class="empty">' + esc(data.note || 'No data yet.') + '</div>';
