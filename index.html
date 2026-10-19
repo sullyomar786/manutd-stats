@@ -209,6 +209,23 @@
   .detail-drop .chips { margin:8px 0 0; }
   .detail-current-blocks { display:flex; flex-wrap:wrap; gap:7px; }
   .detail-current-blocks .chip { font-size:12px; }
+
+  /* ── current fixture availability ── */
+  .current-availability-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; }
+  .current-mode .seg button { padding:7px 10px; font-size:13px; }
+  .current-mode .seg button[aria-pressed="true"] { background:var(--red); }
+  .current-stand-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:10px; }
+  .current-stand-card { min-width:0; padding:13px 14px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
+  .current-stand-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding-bottom:8px; border-bottom:1px solid var(--soft); }
+  .current-stand-head h4 { margin:0; font-size:14px; font-weight:700; }
+  .current-stand-total { flex:none; font-family:var(--display); font-size:27px; line-height:1; font-weight:800; white-space:nowrap; }
+  .current-stand-total small { font:500 11px var(--body); color:var(--muted); margin-left:4px; }
+  .current-block-list { list-style:none; padding:0; margin:5px 0 0; }
+  .current-block-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--soft); }
+  .current-block-row:last-child { border-bottom:0; }
+  .current-block-name { min-width:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 8px; }
+  .current-block-name small { color:var(--muted); font-size:11px; }
+  .current-block-value { flex:none; font-variant-numeric:tabular-nums; font-weight:700; text-align:right; }
   @media (max-width:700px) {
     .detail-head { padding:15px; }
     .detail-content { padding:14px 12px 22px; }
@@ -373,7 +390,7 @@
     } catch (e) { return null; }
   }
   var state = { hours: +store.get('hours') || 168, threshold: +store.get('threshold') || 20, fixture: store.get('fixture') || 'all', metric: +store.get('metric') || 1, seriesFixtures: storedSeriesFixtures() };
-  var data = null, charts = {}, timer = null, inflight = 0, fixturesKnown = '', seriesNamesKnown = '', detailInflight = 0, activeDetailFixture = null, detailOpener = null;
+  var data = null, charts = {}, timer = null, inflight = 0, fixturesKnown = '', seriesNamesKnown = '', detailInflight = 0, activeDetailFixture = null, detailOpener = null, activeDetailData = null, detailAvailabilityMode = 'seats';
 
   // ── small helpers ──
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -714,6 +731,7 @@
     detailInflight++;
     $('detailOverlay').hidden = true;
     activeDetailFixture = null;
+    activeDetailData = null;
     if (charts.cDetail) { charts.cDetail.destroy(); delete charts.cDetail; }
     if (detailOpener && typeof detailOpener.focus === 'function' && document.contains(detailOpener)) detailOpener.focus();
   }
@@ -766,10 +784,6 @@
       kpi(st.biggest ? '+' + st.biggest : '–', 'Largest release') +
       kpi(st.releasesPer100 == null ? '–' : st.releasesPer100, 'Releases per 100 scan intervals') +
       '</div>';
-    var latestBlocks = now && now.blocks ? now.blocks : [];
-    var currentBlockHtml = latestBlocks.length
-      ? latestBlocks.map(function (b) { return '<span class="chip"><b>' + esc(b.code) + '</b> ' + esc(b.stand) + ': ' + esc(b.n) + '</span>'; }).join('')
-      : '<span class="detail-note">No blocks with seats were recorded on the latest complete scan.</span>';
     var blocks = d.blocks || [];
     var blockTable = blocks.length
       ? '<div class="tablewrap"><table><thead><tr><th>Block</th><th>Stand</th><th class="n">Scans with seats</th><th class="n">Avg seats</th><th class="n">Max at once</th><th class="n">Avg adjacent pairs</th><th class="n">Avg adult price</th></tr></thead><tbody>' +
@@ -788,14 +802,58 @@
             '<small>' + esc(e.from) + ' → ' + esc(e.to) + ' seats before / after the release</small><div class="chips">' + chips + pair + '</div></article>';
         }).join('') + '</div>'
       : '<div class="empty">No drops at the selected threshold in this period.</div>';
+    activeDetailData = d;
     $('detailBody').innerHTML = latestStatus + kpis +
+      '<div class="detail-section"><h3>Current availability</h3><p class="detail-note">Seats and pairs by stand and block, from the latest complete scan. Switch the view below.</p><div id="currentAvailability">' + renderCurrentAvailability(now) + '</div></div>' +
       '<div class="detail-section"><h3>Availability over time</h3><p class="detail-note">Seat counts from complete scans only. The selected look-back and drop threshold are used here too.</p><div class="detail-card"><div class="chartbox tall" id="detailChartBox"><canvas id="cDetail" role="img" aria-label="Seat availability history for ' + esc(name) + '"></canvas></div></div></div>' +
-      '<div class="detail-section detail-two"><div><div class="detail-card"><h3>Blocks with seats on latest complete scan</h3><p class="detail-note">The dashboard data records the five highest-count blocks here.</p><div class="detail-current-blocks">' + currentBlockHtml + '</div></div></div>' +
-      '<div><div class="detail-card"><h3>Latest detected drop</h3>' + (fx && fx.lastDrop ? '<p><strong style="color:var(--red)">+' + esc(fx.lastDrop.delta) + ' seats</strong></p><p class="detail-note">' + esc(fmtT(fx.lastDrop.t)) + '</p>' : '<p class="detail-note">No threshold-sized drop recorded for this fixture.</p>') + '</div></div></div>' +
+      '<div class="detail-section"><div class="detail-card"><h3>Latest detected drop</h3>' + (fx && fx.lastDrop ? '<p><strong style="color:var(--red)">+' + esc(fx.lastDrop.delta) + ' seats</strong></p><p class="detail-note">' + esc(fmtT(fx.lastDrop.t)) + '</p>' : '<p class="detail-note">No threshold-sized drop recorded for this fixture.</p>') + '</div></div>' +
       '<div class="detail-section"><h3>Drop history</h3><p class="detail-note">Drops of ' + esc(d.params.threshold) + '+ seats, newest first.</p>' + dropHtml + '</div>' +
       '<div class="detail-section"><h3>Block history</h3><p class="detail-note">Aggregated across complete scans in the selected period. A block is counted as open when it had at least one seat.</p><div class="detail-card">' + blockTable + '</div></div>';
     renderDetailChart(d, name);
   }
+
+  function renderCurrentAvailability(now) {
+    var metric = {
+      seats: { field: 'seats', singular: 'seat', plural: 'seats' },
+      pairs: { field: 'allPairs', singular: 'pair', plural: 'pairs' },
+      adjacent: { field: 'adjacentPairs', singular: 'adjacent pair', plural: 'adjacent pairs' }
+    }[detailAvailabilityMode] || { field: 'seats', singular: 'seat', plural: 'seats' };
+    var sections = now && Array.isArray(now.sections) ? now.sections : [];
+    var available = sections.filter(function (s) { return Number(s[metric.field]) > 0; });
+    var byStand = {};
+    available.forEach(function (s) {
+      var stand = s.stand || 'Other / uncatalogued';
+      if (!byStand[stand]) byStand[stand] = [];
+      byStand[stand].push(s);
+    });
+    var standNames = Object.keys(byStand).sort(function (a, b) {
+      var ta = byStand[a].reduce(function (sum, s) { return sum + Number(s[metric.field] || 0); }, 0);
+      var tb = byStand[b].reduce(function (sum, s) { return sum + Number(s[metric.field] || 0); }, 0);
+      return tb - ta || a.localeCompare(b);
+    });
+    var cards = standNames.map(function (stand) {
+      var rows = byStand[stand].slice().sort(function (a, b) {
+        return Number(b[metric.field] || 0) - Number(a[metric.field] || 0) || String(a.code).localeCompare(String(b.code));
+      });
+      var total = rows.reduce(function (sum, s) { return sum + Number(s[metric.field] || 0); }, 0);
+      return '<article class="current-stand-card"><div class="current-stand-head"><h4>' + esc(stand) + '</h4><div class="current-stand-total">' + esc(total) + '<small>' + esc(metric.plural) + '</small></div></div>' +
+        '<ul class="current-block-list">' + rows.map(function (s) {
+          var n = Number(s[metric.field] || 0);
+          return '<li class="current-block-row"><span class="current-block-name"><strong>' + esc(s.code) + '</strong>' + (s.tier ? '<small>' + esc(s.tier) + '</small>' : '') + '</span><span class="current-block-value">' + esc(n) + ' ' + esc(n === 1 ? metric.singular : metric.plural) + '</span></li>';
+        }).join('') + '</ul></article>';
+    }).join('');
+    var when = now && now.t ? 'Latest complete scan: ' + fmtT(now.t) + '. ' : '';
+    var note = !sections.length
+      ? 'Section-level counts are not available for the latest complete scan.'
+      : !available.length ? 'No ' + metric.plural + ' were recorded in the latest complete scan.' : available.length + ' blocks with ' + metric.plural + ' across ' + standNames.length + ' ' + (standNames.length === 1 ? 'stand' : 'stands') + '.';
+    return '<div class="current-availability-tools"><div class="seg current-mode" role="group" aria-label="Current availability metric">' +
+      '<button type="button" data-current-mode="seats" aria-pressed="' + String(detailAvailabilityMode === 'seats') + '">All seats</button>' +
+      '<button type="button" data-current-mode="pairs" aria-pressed="' + String(detailAvailabilityMode === 'pairs') + '">All pairs</button>' +
+      '<button type="button" data-current-mode="adjacent" aria-pressed="' + String(detailAvailabilityMode === 'adjacent') + '">Adjacent pairs</button>' +
+      '</div><span class="series-count">' + esc(when + note) + '</span></div>' +
+      (cards ? '<div class="current-stand-grid">' + cards + '</div>' : '<div class="empty">' + esc(note) + '</div>');
+  }
+
   function renderDetailChart(d, name) {
     var series = d.trends && d.trends.series ? d.trends.series[name] : null;
     var points = series || [];
@@ -859,6 +917,15 @@
   $('fxTable').addEventListener('keydown', function (e) {
     var row = e.target.closest('tr[data-fixture]');
     if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openFixtureDetails(row.getAttribute('data-fixture'), row); }
+  });
+  $('detailBody').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-current-mode]');
+    if (!b || !activeDetailData) return;
+    var next = b.getAttribute('data-current-mode');
+    if (['seats', 'pairs', 'adjacent'].indexOf(next) < 0 || next === detailAvailabilityMode) return;
+    detailAvailabilityMode = next;
+    var fx = (activeDetailData.fixtures || []).find(function (f) { return f.name === activeDetailFixture; }) || null;
+    $('currentAvailability').innerHTML = renderCurrentAvailability(fx && fx.now);
   });
   $('detailClose').addEventListener('click', closeFixtureDetails);
   $('detailOverlay').addEventListener('click', function (e) { if (e.target === $('detailOverlay')) closeFixtureDetails(); });
