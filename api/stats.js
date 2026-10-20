@@ -1,5 +1,5 @@
 'use strict';
-const { loadScans } = require('../lib/github');
+const { loadScans, loadStatus } = require('../lib/github');
 const { analyze, nowInTz } = require('../lib/analyze');
 
 const clamp = (v, lo, hi, dflt) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt; };
@@ -18,8 +18,10 @@ module.exports = async (req, res) => {
     const threshold = clamp(q.threshold, 3, 500, 20);
     const fixture = typeof q.fixture === 'string' && q.fixture ? q.fixture : 'all';
 
+    const statusPromise = loadStatus().catch(() => null);      // optional: never lets a status problem break the page
     const { scans, files, warnings, note } = await loadScans(Math.ceil(hours / 24) + 1);
     const out = analyze(scans, { hours, threshold, fixture, nowMs: nowInTz(process.env.DATA_TZ || 'Europe/London') });
+    out.trackerStatus = await statusPromise;
     out.files = files.map(f => ({ name: f.name, kb: Math.round((f.size || 0) / 1024) }));
     if (warnings.length) out.warnings = warnings;
     if (note && out.empty) out.note = note;
