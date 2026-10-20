@@ -156,6 +156,7 @@
 
   .banner { margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; background: #fff4d6; border: 1px solid #e8cf86; }
   .banner.err { background: #fde8ea; border-color: #eba0a6; }
+  .banner.info { background: var(--soft); border-color: var(--line); }
   .keyform { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
   .keyform input { flex: 1; min-width: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   .keyform button { border: 0; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600; }
@@ -265,6 +266,7 @@
 
 <main class="wrap">
   <div id="banner" hidden></div>
+  <div id="trackerNotice" hidden></div>
 
   <section class="block" aria-labelledby="h-now">
     <h2 id="h-now">Right now</h2>
@@ -448,9 +450,66 @@
     $('statusText').innerHTML = esc(text) + (small ? ' <small>' + esc(small) + '</small>' : '');
   }
 
+  // ── tracker notice (from the tracker's status.json: blocked / cooling down / CAPTCHA pause / stopped) ──
+  var STATUS_CLOCK = null;
+  try { STATUS_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { STATUS_CLOCK = null; }
+  function statusClock(sec) {
+    var d = new Date(sec * 1000);
+    if (!STATUS_CLOCK) return pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return STATUS_CLOCK.format(d).replace(',', '');
+  }
+  function statusAge(sec) {
+    var m = Math.max(0, Math.round(sec / 60));
+    return m < 90 ? m + ' min' : Math.round(m / 60) + ' h';
+  }
+  // Returns null (nothing to say) or { cls, pill: [cls, text, small] | null, html }.
+  function noticeFor(ts, nowSec) {
+    if (!ts || !ts.state || ts.updated == null) return null;
+    var age = nowSec - ts.updated;
+    if (ts.state === 'running') {
+      if (ts.ramp_until && ts.ramp_until > nowSec) {
+        return { cls: 'banner info', pill: null, html: '<strong>Easing back in after a block.</strong> The tracker is deliberately waiting a little longer between pages until about ' + esc(statusClock(ts.ramp_until)) + '. Scans can be slower than usual until then.' };
+      }
+      return null;
+    }
+    if (ts.state === 'blocked') {
+      if (age > 90 * 60) {
+        return { cls: 'banner', pill: null, html: '<strong>Out-of-date status.</strong> The last thing the tracker reported was a block from the ticket site, but nothing has been reported for ' + esc(statusAge(age)) + ' \u2014 it may be switched off.' };
+      }
+      var cool = ts.cooldown_hours ? ' (a ' + ts.cooldown_hours + ' h cooldown' + (ts.level > 1 ? ', longer because it was blocked again' : '') + ')' : '';
+      if (ts.until && ts.until > nowSec) {
+        return { cls: 'banner err', pill: ['offline', 'Blocked by the ticket site', 'no requests until ' + statusClock(ts.until)],
+          html: '<strong>Blocked by the ticket site.</strong> The tracker has stopped making requests and is cooling down until <strong>' + esc(statusClock(ts.until)) + '</strong>' + esc(cool) + '. Then it checks with a single page load. The gap in the data below is expected.' };
+      }
+      return { cls: 'banner', pill: ['delayed', 'Checking if the block has cleared', ''],
+        html: '<strong>Cooldown over.</strong> The tracker is checking the ticket site with one page load to see whether the block has cleared.' };
+    }
+    if (ts.state === 'captcha') {
+      if (age > 30 * 60) return null;
+      return { cls: 'banner', pill: ['delayed', 'Paused (CAPTCHA page)', ts.until ? 'retrying around ' + statusClock(ts.until) : ''],
+        html: '<strong>The ticket site showed a CAPTCHA page.</strong> The tracker is pausing' + (ts.until ? ' until about ' + esc(statusClock(ts.until)) : '') + ' and will then try again.' };
+    }
+    if (ts.state === 'stopped') {
+      if (age > 7 * 86400) return null;
+      return { cls: 'banner err', pill: ['offline', 'Tracker stopped', 'needs a restart'],
+        html: '<strong>The tracker stopped itself</strong> at ' + esc(statusClock(ts.updated)) + ' after repeated CAPTCHAs. It needs restarting by hand once the site is accessible again.' };
+    }
+    return null;
+  }
+  function renderTrackerNotice() {
+    var box = $('trackerNotice'), n = null;
+    try { n = noticeFor(data && data.trackerStatus, Date.now() / 1000); } catch (e) { n = null; }
+    if (!n) { box.hidden = true; box.innerHTML = ''; return null; }
+    box.hidden = false; box.className = n.cls; box.innerHTML = n.html;
+    return n;
+  }
+  // ── end tracker notice ──
+
   // ── rendering ──
   function render() {
     renderStatus(); renderControls();
+    var notice = renderTrackerNotice();
+    if (notice && notice.pill) setStatus(notice.pill[0], notice.pill[1], notice.pill[2]);
     if (data.empty) { renderEmpty(); return; }
     renderBoard(); renderDrops(); renderInsights(); renderSeries(); renderHour(); renderHeat();
     renderHist(); renderStands(); renderBlocks(); renderFixtureTable(); renderHealth(); renderFoot();
