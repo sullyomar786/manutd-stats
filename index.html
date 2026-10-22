@@ -520,7 +520,17 @@
     var t = data.tracker || {};
     if (t.state === 'nodata') return setStatus('', 'No data yet', '');
     var txt = { live: 'Tracker is live', delayed: 'Tracker is running late', offline: 'Tracker looks offline', unknown: 'Tracker status unknown' }[t.state] || 'Tracker';
-    setStatus(t.state === 'unknown' ? '' : t.state, txt, 'last scan ' + ago(t.minutesAgo) + ' (' + fmtT(t.lastScanT) + ')');
+    // "Last COMPLETE scan" = when the tracker last finished a whole round. Games are saved as each one finishes, so the newest
+    // row can belong to a round that is still under way; the tracker's status.json says when the last round really ended.
+    var rd = data.trackerStatus && data.trackerStatus.round, nowSec = Date.now() / 1000, doneAgo, doneT;
+    if (rd && rd.completed && rd.completedT) {
+      doneAgo = Math.max(0, Math.round((nowSec - rd.completed) / 60)); doneT = rd.completedT;
+    } else {
+      doneT = (rd && rd.in_progress && t.prevRoundT) ? t.prevRoundT : (t.lastRoundT || t.lastScanT);
+      doneAgo = t.minutesAgo == null ? null : Math.round(t.minutesAgo + (t.lastScanT - doneT) / 60000);
+    }
+    var scanning = !!(rd && rd.in_progress && rd.started && nowSec - rd.started < 45 * 60 && t.state !== 'offline');
+    setStatus(t.state === 'unknown' ? '' : t.state, txt, 'last complete scan ' + ago(doneAgo) + ' (' + fmtT(doneT) + ')' + (scanning ? ' \u00b7 scanning now' : ''));
     $('updated').textContent = 'Refreshes every minute. Loaded ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
   function renderControls() {
