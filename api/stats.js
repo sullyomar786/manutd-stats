@@ -22,6 +22,12 @@ module.exports = async (req, res) => {
     const { scans, files, warnings, note } = await loadScans(Math.ceil(hours / 24) + 1);
     const out = analyze(scans, { hours, threshold, fixture, nowMs: nowInTz(process.env.DATA_TZ || 'Europe/London') });
     out.trackerStatus = await statusPromise;
+    const rd = out.trackerStatus && out.trackerStatus.round;      // put the round times into the data's own timezone, like the scan times
+    if (rd) {
+      const tz = process.env.DATA_TZ || 'Europe/London';
+      if (rd.completed) rd.completedT = nowInTz(tz, rd.completed * 1000);
+      if (rd.started) rd.startedT = nowInTz(tz, rd.started * 1000);
+    }
     out.files = files.map(f => ({ name: f.name, kb: Math.round((f.size || 0) / 1024) }));
     if (warnings.length) out.warnings = warnings;
     if (note && out.empty) out.note = note;
