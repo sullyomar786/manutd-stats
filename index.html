@@ -157,6 +157,16 @@
   .banner { margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; background: #fff4d6; border: 1px solid #e8cf86; }
   .banner.err { background: #fde8ea; border-color: #eba0a6; }
   .banner.info { background: var(--soft); border-color: var(--line); }
+  .sec-hist tr.sec-row { cursor: pointer; }
+  .sec-hist tr.sec-row:hover td, .sec-hist tr.sec-row:focus td { background: var(--soft); outline: none; }
+  .sec-hist tr.sec-row[aria-expanded="true"] td { background: var(--soft); }
+  .sec-hist tr.sec-ep > td { background: var(--soft); padding: 12px 14px; }
+  .sec-hist small { color: var(--muted); margin-left: 6px; font-weight: 400; }
+  .ep-strip { width: 100%; height: 24px; display: block; border: 1px solid var(--line); border-radius: 4px; }
+  .ep-strip rect { fill: var(--red); opacity: .8; }
+  .ep-strip rect.ep-on { opacity: 1; }
+  .ep-strip-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 3px 0 10px; }
+  .ep-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .keyform { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
   .keyform input { flex: 1; min-width: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   .keyform button { border: 0; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600; }
@@ -788,6 +798,7 @@
   function openFixtureDetails(name, opener) {
     if (!name) return;
     activeDetailFixture = name;
+    openSectionCode = null;
     detailOpener = opener || document.activeElement;
     $('detailOverlay').hidden = false;
     $('detailTitle').textContent = name;
@@ -875,10 +886,79 @@
     $('detailBody').innerHTML = latestStatus + kpis +
       '<div class="detail-section"><h3>Current availability</h3><p class="detail-note">Seats and pairs by stand and block, from the latest complete scan. Switch the view below.</p><div id="currentAvailability">' + renderCurrentAvailability(now) + '</div></div>' +
       '<div class="detail-section"><h3>Availability over time</h3><p class="detail-note">Seat counts from complete scans only. The selected look-back and drop threshold are used here too.</p><div class="detail-card"><div class="chartbox tall" id="detailChartBox"><canvas id="cDetail" role="img" aria-label="Seat availability history for ' + esc(name) + '"></canvas></div></div></div>' +
+      '<div class="detail-section"><h3>Blocks over time</h3><p class="detail-note">Every block that had seats or pairs in this period, for the view you pick. Click a block to see each time it was available and how long it lasted. Scans are minutes apart, so "lasted" is a range: it was there for at least the first figure and was gone by the second.</p><div id="sectionHistory">' + renderSectionHistory(d.sectionHistory) + '</div></div>' +
       '<div class="detail-section"><div class="detail-card"><h3>Latest detected drop</h3>' + (fx && fx.lastDrop ? '<p><strong style="color:var(--red)">+' + esc(fx.lastDrop.delta) + ' seats</strong></p><p class="detail-note">' + esc(fmtT(fx.lastDrop.t)) + '</p>' : '<p class="detail-note">No threshold-sized drop recorded for this fixture.</p>') + '</div></div>' +
       '<div class="detail-section"><h3>Drop history</h3><p class="detail-note">Drops of ' + esc(d.params.threshold) + '+ seats, newest first.</p>' + dropHtml + '</div>' +
       '<div class="detail-section"><h3>Block history</h3><p class="detail-note">Aggregated across complete scans in the selected period. A block is counted as open when it had at least one seat.</p><div class="detail-card">' + blockTable + '</div></div>';
     renderDetailChart(d, name);
+  }
+
+  // ── blocks over time (each block's history for the fixture that is open) ──
+  var openSectionCode = null;
+  function historyKey() { return detailAvailabilityMode === 'adjacent' ? 'adj' : (detailAvailabilityMode === 'pairs' ? 'pairs' : 'seats'); }
+  function lenText(ms) {
+    var m = Math.round(ms / 60000);
+    if (m < 1) return '<1 min';
+    if (m < 90) return m + ' min';
+    var h = m / 60;
+    return (h < 10 ? Math.round(h * 10) / 10 : Math.round(h)) + ' h';
+  }
+  // ep = [start, last, gone, scans, peak, flag]  (flag 1 = still there, 2 = ended by a gap in the data)
+  function lastedText(ep) {
+    var lo = ep[1] - ep[0];
+    if (ep[5] === 1) return lenText(lo) + '+ (still there)';
+    if (ep[5] === 2 || ep[2] == null) return 'at least ' + lenText(lo) + ' (data gap)';
+    var hi = ep[2] - ep[0];
+    if (lo === 0) return 'under ' + lenText(hi);
+    var a = lenText(lo), b = lenText(hi);
+    return a.split(' ')[1] === b.split(' ')[1] ? a.split(' ')[0] + '–' + b : a + ' – ' + b;
+  }
+  function episodeStrip(eps, from, to) {
+    var span = Math.max(1, to - from);
+    var bars = eps.map(function (e) {
+      var x = (e[0] - from) / span * 1000, end = e[2] != null ? e[2] : e[1], w = Math.max(3, (end - e[0]) / span * 1000);
+      return '<rect x="' + x.toFixed(1) + '" y="3" width="' + w.toFixed(1) + '" height="18" rx="2"' + (e[5] === 1 ? ' class="ep-on"' : '') + '><title>' + esc(fmtT(e[0])) + '</title></rect>';
+    }).join('');
+    return '<svg class="ep-strip" viewBox="0 0 1000 24" preserveAspectRatio="none" role="img" aria-label="When this block had availability across the period">' + bars + '</svg>' +
+      '<div class="ep-strip-axis"><span>' + esc(fmtT(from)) + '</span><span>' + esc(fmtT(to)) + '</span></div>';
+  }
+  function renderSectionHistory(sh) {
+    var k = historyKey(), noun = { seats: 'seats', pairs: 'pairs', adj: 'adjacent pairs' }[k];
+    var tools = '<div class="current-availability-tools"><div class="seg current-mode" role="group" aria-label="Block history metric">' +
+      '<button type="button" data-current-mode="seats" aria-pressed="' + String(detailAvailabilityMode === 'seats') + '">All seats</button>' +
+      '<button type="button" data-current-mode="pairs" aria-pressed="' + String(detailAvailabilityMode === 'pairs') + '">All pairs</button>' +
+      '<button type="button" data-current-mode="adjacent" aria-pressed="' + String(detailAvailabilityMode === 'adjacent') + '">Adjacent pairs</button></div>';
+    if (!sh || !sh.sections) return tools + '</div><div class="empty">Block history isn\'t available for this fixture in the selected period.</div>';
+    var rows = sh.sections.filter(function (s) { return s[k] && s[k].length; }).map(function (s) {
+      var e = s[k], last = e[e.length - 1];
+      return { s: s, eps: e, total: s[k + 'Total'] || e.length, now: last[5] === 1, last: last,
+               peak: e.reduce(function (m, x) { return Math.max(m, x[4]); }, 0),
+               longest: e.reduce(function (m, x) { return Math.max(m, x[1] - x[0]); }, 0) };
+    });
+    rows.sort(function (a, b) { return (b.now - a.now) || (b.total - a.total) || String(a.s.code).localeCompare(String(b.s.code)); });
+    var nowCount = rows.filter(function (r) { return r.now; }).length;
+    tools += '<span class="series-count">' + esc(rows.length + ' block' + (rows.length === 1 ? '' : 's') + ' had ' + noun + ' in this period' + (rows.length ? ' · ' + nowCount + ' available now' : '')) + '</span></div>';
+    if (!rows.length) return tools + '<div class="empty">No block had ' + esc(noun) + ' in this period.</div>';
+    var body = rows.map(function (r) {
+      var open = openSectionCode === r.s.code;
+      var row = '<tr class="sec-row" data-section-code="' + esc(r.s.code) + '" tabindex="0" role="button" aria-expanded="' + String(open) + '">' +
+        '<td><strong>' + esc(r.s.code) + '</strong>' + (r.s.tier ? '<small>' + esc(r.s.tier) + '</small>' : '') + '</td><td>' + esc(r.s.stand) + '</td>' +
+        '<td class="n">' + esc(r.total) + '</td><td class="n">' + esc(lenText(r.longest)) + '</td><td class="n">' + esc(r.peak) + '</td>' +
+        '<td>' + (r.now ? '<span class="chip"><b>available now</b></span>' : esc(fmtT(r.last[1]))) + '</td></tr>';
+      if (!open) return row;
+      var eps = r.eps.slice().reverse().map(function (e) {
+        return '<tr><td>' + esc(fmtT(e[0])) + '</td><td>' + esc(lastedText(e)) + '</td><td>' + (e[2] != null ? esc(fmtT(e[2])) : (e[5] === 1 ? 'still there' : 'unknown')) +
+          '</td><td class="n">' + esc(e[4]) + '</td><td class="n">' + esc(e[3]) + '</td></tr>';
+      }).join('');
+      var capped = r.total > r.eps.length ? '<p class="ep-note">Showing the latest ' + esc(r.eps.length) + ' of ' + esc(r.total) + ' times.</p>' : '';
+      return row + '<tr class="sec-ep"><td colspan="6">' + episodeStrip(r.eps, sh.from, sh.to) +
+        '<div class="tablewrap"><table><thead><tr><th>First seen</th><th>Lasted</th><th>Gone by</th><th class="n">Most at once</th><th class="n">Scans</th></tr></thead><tbody>' + eps + '</tbody></table></div>' + capped + '</td></tr>';
+    }).join('');
+    return tools + '<div class="tablewrap"><table class="sec-hist"><thead><tr><th>Block</th><th>Stand</th><th class="n">Times available</th><th class="n">Longest seen</th><th class="n">Most at once</th><th>Last seen</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+  }
+  function refreshSectionHistory() {
+    var box = $('sectionHistory');
+    if (box && activeDetailData) box.innerHTML = renderSectionHistory(activeDetailData.sectionHistory);
   }
 
   function renderCurrentAvailability(now) {
@@ -995,6 +1075,20 @@
     detailAvailabilityMode = next;
     var fx = (activeDetailData.fixtures || []).find(function (f) { return f.name === activeDetailFixture; }) || null;
     $('currentAvailability').innerHTML = renderCurrentAvailability(fx && fx.now);
+    refreshSectionHistory();
+  });
+  function toggleSectionRow(row) {
+    if (!row || !activeDetailData) return;
+    var code = row.getAttribute('data-section-code');
+    openSectionCode = openSectionCode === code ? null : code;
+    refreshSectionHistory();
+    var again = $('sectionHistory').querySelector('tr.sec-row[data-section-code="' + code.replace(/"/g, '') + '"]');
+    if (again) again.focus();
+  }
+  $('detailBody').addEventListener('click', function (e) { toggleSectionRow(e.target.closest('tr.sec-row')); });
+  $('detailBody').addEventListener('keydown', function (e) {
+    var row = e.target.closest && e.target.closest('tr.sec-row');
+    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleSectionRow(row); }
   });
   $('detailClose').addEventListener('click', closeFixtureDetails);
   $('detailOverlay').addEventListener('click', function (e) { if (e.target === $('detailOverlay')) closeFixtureDetails(); });
