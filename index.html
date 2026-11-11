@@ -340,7 +340,7 @@
     <div class="grid2" style="margin-top:12px">
       <div class="panel"><h3>Size of increases</h3><p class="note" id="histNote">New seats between two scans. Red bars are big enough to count as drops.</p>
         <div class="chartbox"><canvas id="cHist" role="img" aria-label="Bar chart of how many seats appear at once"></canvas></div></div>
-      <div class="panel"><h3>Stands with seats</h3><p class="note">Share of scans where the stand had at least one seat.</p>
+      <div class="panel"><h3>Stands with seats</h3><p class="note">Share of scans where the stand had at least one seat. Lower-Upper Stretford End is rows 1-15 of the Upper Stretford End, shown separately (and still counted in it); only recorded since the tracker started saving rows.</p>
         <div class="chartbox"><canvas id="cStands" role="img" aria-label="Bar chart of how often each stand has seats"></canvas></div>
         <div class="legend"><span><i style="background:var(--red)"></i>Lower tier</span><span><i style="background:var(--slate)"></i>Middle</span><span><i style="background:var(--navy)"></i>Upper</span></div></div>
     </div>
@@ -587,7 +587,7 @@
       var tags = (f.ga ? '<span class="tag ga">General sale</span>' : '') + (f.ucl ? '<span class="tag ucl">Champions League</span>' : '') +
                  (f.minutesBehind > 90 ? '<span class="tag stale">Not scanned lately</span>' : '');
       var n = f.now;
-      var sub = n ? (f.lastScanComplete ? 'Scanned ' + fmtT(n.t) : 'Latest scan was incomplete, showing ' + fmtT(n.t)) : 'No complete scan yet';
+      var sub = n ? (f.lastScanComplete ? 'Scanned ' + fmtT(n.t) : 'Latest scan was incomplete' + (f.lastScanReason ? ' (' + f.lastScanReason + ')' : '') + ', showing ' + fmtT(n.t)) : 'No complete scan yet' + (f.lastScanReason ? ' (' + f.lastScanReason + ')' : '');
       var blocks = n && n.blocks.length ? '<span class="fx-sub">' + n.blocks.slice(0, 3).map(function (b) { return esc(b.stand) + ' ' + b.n; }).join(', ') + '</span>' : '';
       html += '<div class="row fixture-row" data-fixture="' + esc(f.name) + '" role="button" tabindex="0" aria-label="Open details for ' + esc(f.name) + '"><div class="fx-name">' + esc(f.name) + tags + '<span class="fx-sub">' + esc(sub) + '</span>' + blocks + '</div>' +
         '<div class="big">' + (n ? n.seats : '–') + '<small>' + (n && n.noSections ? 'no general seats' : 'seats') + '</small></div>' +
@@ -749,12 +749,15 @@
       '<div><b>' + (p.releasesPer100 == null ? '–' : p.releasesPer100) + '</b><span>Premier League (' + plural(p.fixtures || 0, 'game') + ', ' + plural(p.drops || 0, 'drop') + ')</span></div></div>';
   }
   function renderHealth() {
-    var q = data.quality || {}, sc = q.statusCounts || {}, bad = Object.keys(sc).filter(function (k) { return k !== 'ok'; });
+    var q = data.quality || {}, sc = q.statusCounts || {}, bad = Object.keys(sc).filter(function (k) { return k !== 'ok' && k !== 'single_inferred'; });
     $('health').innerHTML =
       '<div><b>' + (q.completePct == null ? '–' : q.completePct + '%') + '</b><span>of scans loaded fully (' + (q.complete || 0) + ' of ' + (q.scans || 0) + ')</span></div>' +
       '<div><b>' + (q.cycles || 0) + '</b><span>scan rounds in range</span></div>' +
-      '<div><b>' + (q.medianCycleMin == null ? '–' : q.medianCycleMin + ' min') + '</b><span>typical gap between rounds</span></div>';
+      '<div><b>' + (q.medianCycleMin == null ? '–' : q.medianCycleMin + ' min') + '</b><span>typical gap between rounds</span></div>' +
+      (q.inferredPct == null ? '' : '<div><b>' + q.inferredPct + '%</b><span>of seats counted without opening their block (single-seat shortcut)</span></div>');
     var d = '';
+    var fr = q.failReasons || [];
+    if (fr.length) d += '<p>Why scans were incomplete:</p><ul>' + fr.map(function (x) { return '<li>' + esc(x.reason) + ' (' + x.count + ')</li>'; }).join('') + '</ul>';
     if (bad.length) d += '<p>Problems the tracker logged: ' + bad.map(function (k) { return esc(k.replace(/_/g, ' ')) + ' (' + sc[k] + ')'; }).join(', ') + '. These scans are left out of every comparison.</p>';
     var off = q.offline || [];
     if (off.length) d += '<p>Gaps longer than 75 minutes between rounds (tracker off, or nothing logged):</p><ul>' + off.map(function (o) { return '<li>' + esc(o.from) + ' to ' + esc(o.to) + ' (' + dur(o.minutes) + ')</li>'; }).join('') + '</ul>';
@@ -848,7 +851,7 @@
     var now = fx && fx.now;
     var st = (d.fixtureStats || []).find(function (x) { return x.fixture === name; }) || {};
     var latestTime = fx && fx.lastScanT ? fmtT(fx.lastScanT) : 'No scan recorded';
-    var scanState = fx ? (fx.lastScanComplete ? 'Complete' : 'Latest scan incomplete') : 'No scans in the selected period';
+    var scanState = fx ? (fx.lastScanComplete ? 'Complete' : 'Latest scan incomplete' + (fx.lastScanReason ? ': ' + fx.lastScanReason : '')) : 'No scans in the selected period';
     $('detailSubtitle').textContent = 'History for the last ' + (state.hours % 24 === 0 ? (state.hours / 24) + ' day' + (state.hours === 24 ? '' : 's') : state.hours + ' hours') + ' · Last scan: ' + latestTime;
     var latestStatus = '<div class="detail-status"><strong>' + esc(scanState) + '</strong>' +
       (fx && fx.ga ? '<span class="tag ga">General sale</span>' : '') + (fx && fx.ucl ? '<span class="tag ucl">Champions League</span>' : '') +
@@ -969,6 +972,9 @@
     }[detailAvailabilityMode] || { field: 'seats', singular: 'seat', plural: 'seats' };
     var sections = now && Array.isArray(now.sections) ? now.sections : [];
     var available = sections.filter(function (s) { return Number(s[metric.field]) > 0; });
+    var realAvail = available.filter(function (s) { return !s.virtual; });
+    var hasVirtual = realAvail.length !== available.length;
+    var realStands = Object.keys(realAvail.reduce(function (m, s) { m[s.stand || 'Other / uncatalogued'] = 1; return m; }, {})).length;
     var byStand = {};
     available.forEach(function (s) {
       var stand = s.stand || 'Other / uncatalogued';
@@ -994,7 +1000,8 @@
     var when = now && now.t ? 'Latest complete scan: ' + fmtT(now.t) + '. ' : '';
     var note = !sections.length
       ? 'Section-level counts are not available for the latest complete scan.'
-      : !available.length ? 'No ' + metric.plural + ' were recorded in the latest complete scan.' : available.length + ' blocks with ' + metric.plural + ' across ' + standNames.length + ' ' + (standNames.length === 1 ? 'stand' : 'stands') + '.';
+      : !available.length ? 'No ' + metric.plural + ' were recorded in the latest complete scan.' : realAvail.length + ' blocks with ' + metric.plural + ' across ' + realStands + ' ' + (realStands === 1 ? 'stand' : 'stands') + '.' +
+          (hasVirtual ? ' Lower-Upper Stretford End = rows 1-15 of the Upper Stretford End, already included in that stand.' : '');
     return '<div class="current-availability-tools"><div class="seg current-mode" role="group" aria-label="Current availability metric">' +
       '<button type="button" data-current-mode="seats" aria-pressed="' + String(detailAvailabilityMode === 'seats') + '">All seats</button>' +
       '<button type="button" data-current-mode="pairs" aria-pressed="' + String(detailAvailabilityMode === 'pairs') + '">All pairs</button>' +
