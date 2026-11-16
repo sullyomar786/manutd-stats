@@ -166,6 +166,26 @@
   .ep-strip rect { fill: var(--red); opacity: .8; }
   .ep-strip rect.ep-on { opacity: 1; }
   .ep-strip-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 3px 0 10px; }
+  .stand-hist { display: flex; flex-direction: column; gap: 8px; }
+  .stand-axis, .stand-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr minmax(120px, 190px); gap: 12px; align-items: center; }
+  .stand-axis { font-size: 11px; color: var(--muted); padding: 0 14px; }
+  .stand-axis .ax { display: flex; justify-content: space-between; }
+  .stand-item { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+  .stand-item.open { border-color: var(--ink); }
+  .stand-row { width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 14px; cursor: pointer; font: inherit; color: inherit; }
+  .stand-row:hover, .stand-row:focus-visible, .stand-item.open > .stand-row { background: var(--soft); outline: none; }
+  .stand-name strong { display: block; }
+  .stand-name small { color: var(--muted); font-weight: 400; }
+  .stand-spark svg { width: 100%; height: 34px; display: block; }
+  .spark .sp-area { fill: var(--red); opacity: .2; }
+  .spark .sp-line { fill: none; stroke: var(--red); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+  .spark .sp-gap { fill: var(--line); opacity: .7; }
+  .stand-stats b { font-size: 17px; }
+  .stand-stats b.none { color: var(--muted); }
+  .stand-stats small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+  .stand-open { padding: 4px 14px 14px; }
+  .stand-open svg.spark.big { width: 100%; height: 120px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  @media (max-width: 700px) { .stand-axis { display: none; } .stand-row { grid-template-columns: 1fr auto; } .stand-spark { grid-column: 1 / -1; order: 3; } }
   .ep-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .keyform { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
   .keyform input { flex: 1; min-width: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
@@ -802,6 +822,7 @@
     if (!name) return;
     activeDetailFixture = name;
     openSectionCode = null;
+    openStand = null;
     detailOpener = opener || document.activeElement;
     $('detailOverlay').hidden = false;
     $('detailTitle').textContent = name;
@@ -889,7 +910,7 @@
     $('detailBody').innerHTML = latestStatus + kpis +
       '<div class="detail-section"><h3>Current availability</h3><p class="detail-note">Seats and pairs by stand and block, from the latest complete scan. Switch the view below.</p><div id="currentAvailability">' + renderCurrentAvailability(now) + '</div></div>' +
       '<div class="detail-section"><h3>Availability over time</h3><p class="detail-note">Seat counts from complete scans only. The selected look-back and drop threshold are used here too.</p><div class="detail-card"><div class="chartbox tall" id="detailChartBox"><canvas id="cDetail" role="img" aria-label="Seat availability history for ' + esc(name) + '"></canvas></div></div></div>' +
-      '<div class="detail-section"><h3>Blocks over time</h3><p class="detail-note">Every block that had seats or pairs in this period, for the view you pick. Click a block to see each time it was available and how long it lasted. Scans are minutes apart, so "lasted" is a range: it was there for at least the first figure and was gone by the second.</p><div id="sectionHistory">' + renderSectionHistory(d.sectionHistory) + '</div></div>' +
+      '<div class="detail-section"><h3>Sections over time</h3><p class="detail-note">How many seats (or pairs) each section had across this period, from complete scans. Every graph runs left to right over the whole period; hatched areas are gaps with no complete scan. Click a section to see its individual blocks and when each one was available.</p><div id="sectionHistory">' + renderSections(d) + '</div></div>' +
       '<div class="detail-section"><div class="detail-card"><h3>Latest detected drop</h3>' + (fx && fx.lastDrop ? '<p><strong style="color:var(--red)">+' + esc(fx.lastDrop.delta) + ' seats</strong></p><p class="detail-note">' + esc(fmtT(fx.lastDrop.t)) + '</p>' : '<p class="detail-note">No threshold-sized drop recorded for this fixture.</p>') + '</div></div>' +
       '<div class="detail-section"><h3>Drop history</h3><p class="detail-note">Drops of ' + esc(d.params.threshold) + '+ seats, newest first.</p>' + dropHtml + '</div>' +
       '<div class="detail-section"><h3>Block history</h3><p class="detail-note">Aggregated across complete scans in the selected period. A block is counted as open when it had at least one seat.</p><div class="detail-card">' + blockTable + '</div></div>';
@@ -925,27 +946,57 @@
     return '<svg class="ep-strip" viewBox="0 0 1000 24" preserveAspectRatio="none" role="img" aria-label="When this block had availability across the period">' + bars + '</svg>' +
       '<div class="ep-strip-axis"><span>' + esc(fmtT(from)) + '</span><span>' + esc(fmtT(to)) + '</span></div>';
   }
-  function renderSectionHistory(sh) {
-    var k = historyKey(), noun = { seats: 'seats', pairs: 'pairs', adj: 'adjacent pairs' }[k];
-    var tools = '<div class="current-availability-tools"><div class="seg current-mode" role="group" aria-label="Block history metric">' +
-      '<button type="button" data-current-mode="seats" aria-pressed="' + String(detailAvailabilityMode === 'seats') + '">All seats</button>' +
-      '<button type="button" data-current-mode="pairs" aria-pressed="' + String(detailAvailabilityMode === 'pairs') + '">All pairs</button>' +
-      '<button type="button" data-current-mode="adjacent" aria-pressed="' + String(detailAvailabilityMode === 'adjacent') + '">Adjacent pairs</button></div>';
-    if (!sh || !sh.sections) return tools + '</div><div class="empty">Block history isn\'t available for this fixture in the selected period.</div>';
-    var rows = sh.sections.filter(function (s) { return s[k] && s[k].length; }).map(function (s) {
+  // ── sections over time: one row per stand with its availability graph; click a stand to open its individual blocks ──
+  var openStand = null;
+  var METRIC_NOUN = { seats: 'seats', pairs: 'pairs', adj: 'adjacent pairs' };
+
+  // Step graph from change points [[t, value], ...] (the value holds until the next point). A data gap breaks the line.
+  function sparkSvg(ser, from, to, gaps, notFrom, big) {
+    var W = 1000, H = big ? 120 : 34, pad = big ? 8 : 3, span = Math.max(1, to - from), peak = Math.max(1, ser.peak);
+    var X = function (t) { return Math.max(0, Math.min(W, (t - from) / span * W)); };
+    var Y = function (v) { return H - pad - (v / peak) * (H - pad * 2); };
+    var gapAt = {};
+    (gaps || []).forEach(function (g) { gapAt[g[0] + '|' + g[1]] = 1; });
+    var segs = [], cur = [], pts = ser.pts || [];
+    pts.forEach(function (p, i) {
+      var x = X(p[0]), y = Y(p[1]);
+      if (cur.length) cur.push([x, cur[cur.length - 1][1]]);
+      cur.push([x, y]);
+      var nx = pts[i + 1];
+      if (nx && gapAt[p[0] + '|' + nx[0]]) { segs.push(cur); cur = []; }
+    });
+    if (cur.length) segs.push(cur);
+    var line = '', area = '', base = Y(0);
+    segs.forEach(function (sg) {
+      if (sg.length === 1) sg.push([Math.min(W, sg[0][0] + 3), sg[0][1]]);
+      var d = 'M' + sg.map(function (q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' L');
+      line += d;
+      area += d + ' L' + sg[sg.length - 1][0].toFixed(1) + ' ' + base.toFixed(1) + ' L' + sg[0][0].toFixed(1) + ' ' + base.toFixed(1) + ' Z';
+    });
+    var hatch = (gaps || []).map(function (g) {
+      return '<rect class="sp-gap" x="' + X(g[0]).toFixed(1) + '" y="0" width="' + Math.max(2, X(g[1]) - X(g[0])).toFixed(1) + '" height="' + H + '"><title>No complete scans ' + esc(fmtT(g[0])) + ' to ' + esc(fmtT(g[1])) + '</title></rect>';
+    }).join('');
+    if (notFrom != null && notFrom > from) hatch += '<rect class="sp-gap" x="0" y="0" width="' + X(notFrom).toFixed(1) + '" height="' + H + '"><title>Not recorded before ' + esc(fmtT(notFrom)) + '</title></rect>';
+    return '<svg class="spark' + (big ? ' big' : '') + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Availability over the period (peak ' + esc(ser.peak) + ')">' +
+      hatch + '<path class="sp-area" d="' + area + '"/><path class="sp-line" d="' + line + '"/></svg>';
+  }
+
+  // blocks of ONE section: each block's episodes (when it was available and for how long)
+  function renderBlockTable(sh, standName) {
+    var k = historyKey(), noun = METRIC_NOUN[k];
+    if (!sh || !sh.sections) return '<div class="empty">Block detail isn\'t available for this fixture in the selected period.</div>';
+    var rows = sh.sections.filter(function (s) { return s.stand === standName && s[k] && s[k].length; }).map(function (s) {
       var e = s[k], last = e[e.length - 1];
       return { s: s, eps: e, total: s[k + 'Total'] || e.length, now: last[5] === 1, last: last,
                peak: e.reduce(function (m, x) { return Math.max(m, x[4]); }, 0),
                longest: e.reduce(function (m, x) { return Math.max(m, x[1] - x[0]); }, 0) };
     });
     rows.sort(function (a, b) { return (b.now - a.now) || (b.total - a.total) || String(a.s.code).localeCompare(String(b.s.code)); });
-    var nowCount = rows.filter(function (r) { return r.now; }).length;
-    tools += '<span class="series-count">' + esc(rows.length + ' block' + (rows.length === 1 ? '' : 's') + ' had ' + noun + ' in this period' + (rows.length ? ' · ' + nowCount + ' available now' : '')) + '</span></div>';
-    if (!rows.length) return tools + '<div class="empty">No block had ' + esc(noun) + ' in this period.</div>';
+    if (!rows.length) return '<div class="empty">No block in this section had ' + esc(noun) + ' in this period.</div>';
     var body = rows.map(function (r) {
       var open = openSectionCode === r.s.code;
       var row = '<tr class="sec-row" data-section-code="' + esc(r.s.code) + '" tabindex="0" role="button" aria-expanded="' + String(open) + '">' +
-        '<td><strong>' + esc(r.s.code) + '</strong>' + (r.s.tier ? '<small>' + esc(r.s.tier) + '</small>' : '') + '</td><td>' + esc(r.s.stand) + '</td>' +
+        '<td><strong>' + esc(r.s.code) + '</strong></td>' +
         '<td class="n">' + esc(r.total) + '</td><td class="n">' + esc(lenText(r.longest)) + '</td><td class="n">' + esc(r.peak) + '</td>' +
         '<td>' + (r.now ? '<span class="chip"><b>available now</b></span>' : esc(fmtT(r.last[1]))) + '</td></tr>';
       if (!open) return row;
@@ -954,14 +1005,54 @@
           '</td><td class="n">' + esc(e[4]) + '</td><td class="n">' + esc(e[3]) + '</td></tr>';
       }).join('');
       var capped = r.total > r.eps.length ? '<p class="ep-note">Showing the latest ' + esc(r.eps.length) + ' of ' + esc(r.total) + ' times.</p>' : '';
-      return row + '<tr class="sec-ep"><td colspan="6">' + episodeStrip(r.eps, sh.from, sh.to) +
+      return row + '<tr class="sec-ep"><td colspan="5">' + episodeStrip(r.eps, sh.from, sh.to) +
         '<div class="tablewrap"><table><thead><tr><th>First seen</th><th>Lasted</th><th>Gone by</th><th class="n">Most at once</th><th class="n">Scans</th></tr></thead><tbody>' + eps + '</tbody></table></div>' + capped + '</td></tr>';
     }).join('');
-    return tools + '<div class="tablewrap"><table class="sec-hist"><thead><tr><th>Block</th><th>Stand</th><th class="n">Times available</th><th class="n">Longest seen</th><th class="n">Most at once</th><th>Last seen</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+    return '<p class="detail-note">Blocks in this section. Click a block to see each time it was available. Scans are minutes apart, so "lasted" is a range: it was there for at least the first figure and was gone by the second.</p>' +
+      '<div class="tablewrap"><table class="sec-hist"><thead><tr><th>Block</th><th class="n">Times available</th><th class="n">Longest seen</th><th class="n">Most at once</th><th>Last seen</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+  }
+
+  function renderSections(d) {
+    var k = historyKey(), noun = METRIC_NOUN[k], st = d && d.standHistory, bh = d && d.sectionHistory;
+    var tools = '<div class="current-availability-tools"><div class="seg current-mode" role="group" aria-label="Sections metric">' +
+      '<button type="button" data-current-mode="seats" aria-pressed="' + String(detailAvailabilityMode === 'seats') + '">All seats</button>' +
+      '<button type="button" data-current-mode="pairs" aria-pressed="' + String(detailAvailabilityMode === 'pairs') + '">All pairs</button>' +
+      '<button type="button" data-current-mode="adjacent" aria-pressed="' + String(detailAvailabilityMode === 'adjacent') + '">Adjacent pairs</button></div>';
+    if (!st || !st.stands) return tools + '</div><div class="empty">Section history isn\'t available for this fixture in the selected period.</div>';
+    var list = st.stands.filter(function (x) { return x[k] && x[k].peak > 0; });
+    list.sort(function (a, b) { return (b[k].peak - a[k].peak) || a.stand.localeCompare(b.stand); });
+    var vi = list.findIndex(function (x) { return x.virtual; }), ui = list.findIndex(function (x) { return x.stand === 'Upper Stretford End'; });
+    if (vi >= 0 && ui >= 0 && vi !== ui + 1) { var v = list.splice(vi, 1)[0]; list.splice(list.findIndex(function (x) { return x.stand === 'Upper Stretford End'; }) + 1, 0, v); }
+    var nowCount = list.filter(function (x) { return x[k].now > 0; }).length;
+    var anyApprox = list.some(function (x) { return x[k].approx; });
+    var hasVirtual = list.some(function (x) { return x.virtual; });
+    tools += '<span class="series-count">' + esc(list.length + ' section' + (list.length === 1 ? '' : 's') + ' had ' + noun + ' in this period' + (list.length ? ' · ' + nowCount + ' available now' : '')) + '</span></div>';
+    if (!list.length) return tools + '<div class="empty">No section had ' + esc(noun) + ' in this period.</div>';
+    var axis = '<div class="stand-axis" aria-hidden="true"><span></span><span class="ax"><span>' + esc(fmtT(st.from)) + '</span><span>' + esc(fmtT(st.to)) + '</span></span><span></span></div>';
+    var items = list.map(function (x) {
+      var ser = x[k], open = openStand === x.stand;
+      var a = ser.now > 0 ? '<b>' + esc(ser.now) + '</b> now' : '<b class="none">none now</b>';
+      var b = 'peak ' + ser.peak + ' · in ' + ser.pct + '% of scans' + (ser.now === 0 && ser.last ? ' · last ' + fmtT(ser.last) : '');
+      var head = '<button type="button" class="stand-row" data-stand="' + esc(x.stand) + '" aria-expanded="' + String(open) + '">' +
+        '<span class="stand-name"><strong>' + esc(x.stand) + '</strong>' + (x.tier && !x.virtual ? '<small>' + esc(x.tier) + '</small>' : '') + '</span>' +
+        '<span class="stand-spark">' + sparkSvg(ser, st.from, st.to, st.gaps, x.virtual ? x.from : null, false) + '</span>' +
+        '<span class="stand-stats">' + a + '<small>' + esc(b) + '</small></span></button>';
+      var inner = '';
+      if (open) {
+        inner = '<div class="stand-open">' + sparkSvg(ser, st.from, st.to, st.gaps, x.virtual ? x.from : null, true) +
+          '<div class="ep-strip-axis"><span>' + esc(fmtT(st.from)) + '</span><span>scale: 0 to ' + esc(ser.peak) + ' ' + esc(noun) + '</span><span>' + esc(fmtT(st.to)) + '</span></div>' +
+          (ser.approx ? '<p class="ep-note">This section changes a lot, so the graph is thinned to keep the page light. Peaks are kept.</p>' : '') +
+          (x.virtual ? '<p class="ep-note">Rows 1-15 of the Upper Stretford End (recorded since ' + esc(fmtT(x.from)) + '). Pairs here are only counted in blocks that were opened.</p>' : '') +
+          renderBlockTable(bh, x.stand) + '</div>';
+      }
+      return '<div class="stand-item' + (open ? ' open' : '') + '">' + head + inner + '</div>';
+    }).join('');
+    return tools + '<div class="stand-hist">' + axis + items + '</div>' +
+      (hasVirtual ? '<p class="ep-note">Lower-Upper Stretford End = rows 1-15 of the Upper Stretford End. It is part of that section, not extra.</p>' : '');
   }
   function refreshSectionHistory() {
     var box = $('sectionHistory');
-    if (box && activeDetailData) box.innerHTML = renderSectionHistory(activeDetailData.sectionHistory);
+    if (box && activeDetailData) box.innerHTML = renderSections(activeDetailData);
   }
 
   function renderCurrentAvailability(now) {
@@ -1092,7 +1183,16 @@
     var again = $('sectionHistory').querySelector('tr.sec-row[data-section-code="' + code.replace(/"/g, '') + '"]');
     if (again) again.focus();
   }
-  $('detailBody').addEventListener('click', function (e) { toggleSectionRow(e.target.closest('tr.sec-row')); });
+  function toggleStandRow(btn) {
+    if (!btn || !activeDetailData) return;
+    var name = btn.getAttribute('data-stand');
+    openStand = openStand === name ? null : name;
+    openSectionCode = null;
+    refreshSectionHistory();
+    var again = Array.prototype.find.call($('sectionHistory').querySelectorAll('button.stand-row'), function (b) { return b.getAttribute('data-stand') === name; });
+    if (again) again.focus();
+  }
+  $('detailBody').addEventListener('click', function (e) { toggleStandRow(e.target.closest('button.stand-row')); toggleSectionRow(e.target.closest('tr.sec-row')); });
   $('detailBody').addEventListener('keydown', function (e) {
     var row = e.target.closest && e.target.closest('tr.sec-row');
     if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleSectionRow(row); }
