@@ -360,7 +360,7 @@
     <div class="grid2" style="margin-top:12px">
       <div class="panel"><h3>Size of increases</h3><p class="note" id="histNote">New seats between two scans. Red bars are big enough to count as drops.</p>
         <div class="chartbox"><canvas id="cHist" role="img" aria-label="Bar chart of how many seats appear at once"></canvas></div></div>
-      <div class="panel"><h3>Stands with seats</h3><p class="note">Share of scans where the stand had at least one seat. Lower-Upper Stretford End is rows 1-15 of the Upper Stretford End, shown separately (and still counted in it); only recorded since the tracker started saving rows.</p>
+      <div class="panel"><h3>Stands with seats</h3><p class="note">Share of scans where the stand had at least one seat. Lower-Upper Stretford End is rows 1-20 of the Upper Stretford End, shown separately (and still counted in it); only recorded since the tracker started saving rows.</p>
         <div class="chartbox"><canvas id="cStands" role="img" aria-label="Bar chart of how often each stand has seats"></canvas></div>
         <div class="legend"><span><i style="background:var(--red)"></i>Lower tier</span><span><i style="background:var(--slate)"></i>Middle</span><span><i style="background:var(--navy)"></i>Upper</span></div></div>
     </div>
@@ -1042,13 +1042,13 @@
         inner = '<div class="stand-open">' + sparkSvg(ser, st.from, st.to, st.gaps, x.virtual ? x.from : null, true) +
           '<div class="ep-strip-axis"><span>' + esc(fmtT(st.from)) + '</span><span>scale: 0 to ' + esc(ser.peak) + ' ' + esc(noun) + '</span><span>' + esc(fmtT(st.to)) + '</span></div>' +
           (ser.approx ? '<p class="ep-note">This section changes a lot, so the graph is thinned to keep the page light. Peaks are kept.</p>' : '') +
-          (x.virtual ? '<p class="ep-note">Rows 1-15 of the Upper Stretford End (recorded since ' + esc(fmtT(x.from)) + '). Pairs here are only counted in blocks that were opened.</p>' : '') +
+          (x.virtual ? '<p class="ep-note">Rows 1-20 of the Upper Stretford End (recorded since ' + esc(fmtT(x.from)) + '). Pairs here are only counted in blocks that were opened.</p>' : '') +
           renderBlockTable(bh, x.stand) + '</div>';
       }
       return '<div class="stand-item' + (open ? ' open' : '') + '">' + head + inner + '</div>';
     }).join('');
     return tools + '<div class="stand-hist">' + axis + items + '</div>' +
-      (hasVirtual ? '<p class="ep-note">Lower-Upper Stretford End = rows 1-15 of the Upper Stretford End. It is part of that section, not extra.</p>' : '');
+      (hasVirtual ? '<p class="ep-note">Lower-Upper Stretford End = rows 1-20 of the Upper Stretford End. It is part of that section, not extra.</p>' : '');
   }
   function refreshSectionHistory() {
     var box = $('sectionHistory');
@@ -1092,7 +1092,7 @@
     var note = !sections.length
       ? 'Section-level counts are not available for the latest complete scan.'
       : !available.length ? 'No ' + metric.plural + ' were recorded in the latest complete scan.' : realAvail.length + ' blocks with ' + metric.plural + ' across ' + realStands + ' ' + (realStands === 1 ? 'stand' : 'stands') + '.' +
-          (hasVirtual ? ' Lower-Upper Stretford End = rows 1-15 of the Upper Stretford End, already included in that stand.' : '');
+          (hasVirtual ? ' Lower-Upper Stretford End = rows 1-20 of the Upper Stretford End, already included in that stand.' : '');
     return '<div class="current-availability-tools"><div class="seg current-mode" role="group" aria-label="Current availability metric">' +
       '<button type="button" data-current-mode="seats" aria-pressed="' + String(detailAvailabilityMode === 'seats') + '">All seats</button>' +
       '<button type="button" data-current-mode="pairs" aria-pressed="' + String(detailAvailabilityMode === 'pairs') + '">All pairs</button>' +
